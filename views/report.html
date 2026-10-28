@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="en"><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Report · Generator Monitor</title>
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="/css/app.css">
+</head><body>
+<main>
+  <div class="page-head no-print"><div><h1>Operator report</h1><div class="muted small">Use Print → “Save as PDF” in your browser to create a PDF.</div></div></div>
+  <div class="card no-print" style="margin-bottom:1.1rem"><div class="row">
+    <div class="field"><label for="from">From</label><input type="datetime-local" id="from"></div>
+    <div class="field"><label for="to">To</label><input type="datetime-local" id="to"></div>
+    <button class="btn-primary" id="gen">Generate report</button>
+    <button id="print">🖨 Print / Save as PDF</button>
+  </div></div>
+  <div id="out"><div class="empty no-print">Choose a range (optional) and click “Generate report”.</div></div>
+</main>
+<script src="/js/common.js"></script>
+<script>
+const iso = (id) => { const v = $('#' + id).value; return v ? new Date(v).toISOString() : ''; };
+async function gen() {
+  const q = new URLSearchParams(); if (iso('from')) q.set('from', iso('from')); if (iso('to')) q.set('to', iso('to'));
+  try {
+    const r = await api('/report?' + q); const g = r.generator, rt = g.rated, s = r.summary, L = r.latestReading;
+    const range = r.range && (r.range.from || r.range.to) ? `${r.range.from ? fmtTime(r.range.from) : 'start'} → ${r.range.to ? fmtTime(r.range.to) : 'now'}` : 'All stored data';
+    const status = (a) => a.status === 'resolved' ? 'Verified resolved' : a.status === 'active' ? (a.ack ? 'Active – acknowledged' : 'Active – open') : (a.ack ? 'Cleared – acknowledged' : 'Cleared (condition ended)');
+    $('#out').innerHTML = `
+      <div class="card stack">
+        <div><h1>Generator Report</h1><div class="muted small">⚠ Software simulation — not a real industrial record.</div></div>
+        <dl class="kv"><dt>Generator</dt><dd>${esc(g.name)} — ${rt.kVA} kVA, ${rt.voltage} V, ${rt.frequency} Hz, ${rt.rpm} RPM, rated ${rt.current} A</dd>
+          <dt>Report date</dt><dd>${fmtTime(r.generated)}</dd><dt>Data range</dt><dd>${esc(range)}</dd><dt>Prepared by</dt><dd>${esc(r.generatedBy)}</dd></dl>
+        <div><h2>Summary</h2><table><tbody>
+          <tr><th>Max winding temp</th><td>${num(s.maxWindingTemp)} °C</td><th>Max bearing temp</th><td>${num(s.maxBearingTemp)} °C</td></tr>
+          <tr><th>Max current</th><td>${num(s.maxCurrent, 2)} A</td><th>Average load</th><td>${num(s.avgLoad)} %</td></tr>
+          <tr><th>Warnings</th><td>${s.warningCount}</td><th>Criticals</th><td>${s.criticalCount}</td></tr></tbody></table></div>
+        <div><h2>Latest stored reading</h2>${L ? `<p class="small muted">${fmtTime(L.ts)} · state ${esc(L.state)}</p><table><tbody>
+          <tr><th>Voltage</th><td>${num(L.voltage)} V</td><th>Current</th><td>${num(L.current, 2)} A</td><th>Frequency</th><td>${num(L.frequency, 2)} Hz</td></tr>
+          <tr><th>Power</th><td>${num(L.power, 2)} kW</td><th>Power factor</th><td>${num(L.powerFactor, 2)}</td><th>Load</th><td>${num(L.load)} %</td></tr>
+          <tr><th>RPM</th><td>${num(L.rpm, 0)}</td><th>Vibration</th><td>${num(L.vibration, 2)} mm/s</td><th>Winding / Bearing</th><td>${num(L.windingTemp)} / ${num(L.bearingTemp)} °C</td></tr></tbody></table>` : '<p class="muted">No readings stored.</p>'}</div>
+        <div><h2>Faults, acknowledgements and resolution</h2><table><thead><tr><th>Fault time</th><th>Fault</th><th>Severity</th><th>Reading</th><th>Acknowledgement</th><th>Resolution</th><th>Status</th></tr></thead><tbody>
+          ${r.alerts.length ? r.alerts.map((a) => `<tr><td>${fmtTime(a.startedAt)}</td><td>${esc(a.name)}</td><td>${a.severity}</td><td>${num(a.value, 1)} ${esc(a.unit)} (limit ${a.threshold})</td>
+            <td>${a.ack ? `${esc(a.ack.by)}, ${fmtTime(a.ack.at)}<br>${esc(a.ack.note)}` : '—'}</td><td>${a.resolution ? `${esc(a.resolution.by)}, ${fmtTime(a.resolution.at)}<br>${esc(a.resolution.note)}` : '—'}</td><td>${status(a)}</td></tr>`).join('') : '<tr><td colspan="7">No faults in this range.</td></tr>'}
+        </tbody></table></div>
+      </div>`;
+  } catch (e) { toast(e.message); }
+}
+(async () => { await initPage('/report'); $('#gen').onclick = gen; $('#print').onclick = () => window.print(); gen(); })();
+</script>
+</body></html>

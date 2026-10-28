@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="en"><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Audit log · Generator Monitor</title>
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="/css/app.css">
+</head><body>
+<main>
+  <div class="page-head"><div><h1>Audit log</h1><div class="muted small">Admin only. Stored separately from operational history and never cleared with it.</div></div></div>
+  <div class="card" style="margin-bottom:1.1rem"><div class="row">
+    <div class="field"><label for="act">Action</label><select id="act"><option value="">All actions</option></select></div>
+    <div class="field"><label for="from">From</label><input type="datetime-local" id="from"></div>
+    <div class="field"><label for="to">To</label><input type="datetime-local" id="to"></div>
+    <button class="btn-primary" id="go">Apply</button>
+  </div></div>
+  <div class="card table-wrap"><table><thead><tr><th>Time</th><th>User</th><th>Action</th><th>Details</th></tr></thead><tbody id="rows"></tbody></table></div>
+</main>
+<script src="/js/common.js"></script>
+<script>
+const ACTIONS = ['user_signup', 'generator_start', 'generator_stop', 'sim_fault_on', 'sim_fault_off', 'sim_faults_cleared', 'alert_ack', 'alert_resolve', 'alert_resolve_rejected', 'threshold_change', 'settings_change', 'role_change', 'user_remove', 'history_clear'];
+const iso = (id) => { const v = $('#' + id).value; return v ? new Date(v).toISOString() : ''; };
+async function load() {
+  const q = new URLSearchParams(); if ($('#act').value) q.set('action', $('#act').value); if (iso('from')) q.set('from', iso('from')); if (iso('to')) q.set('to', iso('to'));
+  try {
+    const rows = await api('/audit?' + q);
+    $('#rows').innerHTML = rows.length ? rows.map((r) => `<tr><td>${fmtTime(r.ts)}</td><td>${esc(r.username)}</td><td><span class="badge">${esc(r.action)}</span></td><td class="small"><code>${esc(JSON.stringify(r.details || {}))}</code></td></tr>`).join('') : '<tr><td colspan="4" class="empty">No audit records.</td></tr>';
+  } catch (e) { toast(e.message); }
+}
+(async () => { await initPage('/audit'); ACTIONS.forEach((a) => $('#act').insertAdjacentHTML('beforeend', `<option>${a}</option>`)); $('#go').onclick = load; load(); })();
+</script>
+</body></html>

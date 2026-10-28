@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="en"><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Sign in · Generator Monitor</title>
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="/css/app.css">
+</head><body>
+<div class="sim-banner">⚠ SOFTWARE SIMULATION — not a real industrial safety system.</div>
+<div class="login-wrap"><div class="card login-card">
+  <h1>Generator Monitor</h1>
+  <p class="muted">Virtual industrial generator monitoring &amp; fault detection</p>
+  <div class="tabs"><button class="on" id="tLogin" type="button">Log in</button><button id="tSignup" type="button">Sign up</button></div>
+  <form id="f" autocomplete="on">
+    <div class="field"><label for="u">Username</label><input id="u" name="username" required minlength="3" maxlength="30" autocomplete="username"></div>
+    <div class="field"><label for="p">Password</label><input id="p" name="password" type="password" required minlength="8" maxlength="72" autocomplete="current-password"></div>
+    <div id="err"></div>
+    <button class="btn-primary" style="width:100%" id="go">Log in</button>
+  </form>
+  <p class="small muted" id="hint" style="display:none">Password: 8+ characters. The very first account created becomes the administrator; later accounts are operators.</p>
+</div></div>
+<script src="/js/common.js"></script>
+<script>
+let mode = 'login';
+function setMode(m) {
+  mode = m; $('#tLogin').classList.toggle('on', m === 'login'); $('#tSignup').classList.toggle('on', m === 'signup');
+  $('#go').textContent = m === 'login' ? 'Log in' : 'Create account'; $('#hint').style.display = m === 'signup' ? 'block' : 'none';
+  $('#p').autocomplete = m === 'login' ? 'current-password' : 'new-password'; $('#err').innerHTML = '';
+}
+$('#tLogin').onclick = () => setMode('login'); $('#tSignup').onclick = () => setMode('signup');
+$('#f').onsubmit = async (e) => {
+  e.preventDefault(); $('#err').innerHTML = '';
+  try { await api('/auth/' + mode, { method: 'POST', body: { username: $('#u').value, password: $('#p').value } }); location.href = '/'; }
+  catch (err) { $('#err').innerHTML = `<div class="notice err">${esc(err.message)}</div>`; }
+};
+</script>
+</body></html>

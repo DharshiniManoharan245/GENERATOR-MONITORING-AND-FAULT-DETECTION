@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="en"><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Thresholds · Generator Monitor</title>
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="/css/app.css">
+</head><body>
+<main>
+  <div class="page-head"><div><h1>Thresholds &amp; settings</h1><div class="muted small">Admin only. Changes are validated, stored in MongoDB and applied to fault detection immediately.</div></div></div>
+  <div class="card table-wrap"><table>
+    <thead><tr><th>Fault</th><th>Trigger</th><th>Warning</th><th>Critical</th><th>Allowed range</th></tr></thead>
+    <tbody id="rows"></tbody>
+  </table>
+    <div id="err" style="margin-top:.8rem"></div>
+    <p style="margin-top:1rem"><button class="btn-primary" id="save">Save thresholds</button> <button id="defaults">Load defaults</button></p>
+  </div>
+  <h2 class="section-title">Voice announcements</h2>
+  <div class="card">
+    <label class="check"><input type="checkbox" id="voiceOn"> Announce new alerts by voice (browser speech synthesis)</label>
+    <label class="check"><input type="checkbox" id="voiceWarn"> Also announce warnings (critical alerts are always announced when enabled)</label>
+    <p><button class="btn-primary" id="saveSettings">Save voice settings</button></p>
+  </div>
+</main>
+<script src="/js/common.js"></script>
+<script>
+let meta;
+(async () => {
+  await initPage('/thresholds');
+  const [t, s] = await Promise.all([api('/thresholds'), api('/generator/status')]);
+  meta = t;
+  $('#rows').innerHTML = t.faults.map((f) => `<tr data-k="${f.key}"><td><strong>${esc(f.name)}</strong></td><td>${f.dir === 'high' ? 'Rises above' : 'Falls below'} (${esc(f.unit)})</td>
+    <td><input type="number" step="any" class="w" value="${t.thresholds[f.key].warn}" style="max-width:120px"></td>
+    <td><input type="number" step="any" class="c" value="${t.thresholds[f.key].crit}" style="max-width:120px"></td>
+    <td class="muted small">${f.bounds.min} – ${f.bounds.max}</td></tr>`).join('');
+  $('#voiceOn').checked = s.settings.voiceEnabled; $('#voiceWarn').checked = s.settings.announceWarnings;
+  $('#defaults').onclick = () => $$('#rows tr').forEach((tr) => { const d = t.defaults[tr.dataset.k]; $('.w', tr).value = d.warn; $('.c', tr).value = d.crit; });
+  $('#save').onclick = async () => {
+    const thresholds = {}; $$('#rows tr').forEach((tr) => { thresholds[tr.dataset.k] = { warn: $('.w', tr).value === '' ? null : Number($('.w', tr).value), crit: $('.c', tr).value === '' ? null : Number($('.c', tr).value) }; });
+    try { const r = await api('/thresholds', { method: 'PUT', body: { thresholds } }); $('#err').innerHTML = ''; toast(`Saved (${r.changed} changed)`); }
+    catch (e) { $('#err').innerHTML = `<div class="notice err"><strong>${esc(e.message)}</strong><ul>${((e.data && e.data.details) || []).map((d) => `<li>${esc(d)}</li>`).join('')}</ul></div>`; }
+  };
+  $('#saveSettings').onclick = async () => {
+    try { await api('/settings', { method: 'PUT', body: { voiceEnabled: $('#voiceOn').checked, announceWarnings: $('#voiceWarn').checked } }); toast('Voice settings saved'); } catch (e) { toast(e.message); }
+  };
+})();
+</script>
+</body></html>

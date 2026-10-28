@@ -1,0 +1,111 @@
+<!doctype html>
+<html lang="en"><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Dashboard · Generator Monitor</title>
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="/css/app.css">
+</head><body>
+<main>
+  <div class="page-head"><div><h1>Live Dashboard</h1><div class="muted small">10 kVA · 400 V · 50 Hz · 1500 RPM virtual generator (software simulation)</div></div></div>
+
+  <div class="card control-bar">
+    <div class="left">
+      <span class="pill s-STOPPED" id="statePill">STOPPED</span>
+      <button class="btn-start" id="startBtn">▶ Start generator</button>
+      <button class="btn-stop" id="stopBtn">■ Stop generator</button>
+    </div>
+    <div class="right">
+      <div class="health"><div><div class="muted small">Overall health</div><div class="health-score" id="healthScore">0</div></div><span class="pill s-INACTIVE" id="healthPill">Offline</span></div>
+      <button class="btn-sm" id="alarmBtn" title="Alarm sound for unacknowledged critical alerts">🔔 Alarm: on</button>
+      <button class="btn-sm" id="voiceBtn">🗣 Voice: on</button>
+      <button class="btn-sm" id="voiceStop">Stop speech</button>
+    </div>
+  </div>
+  <div id="soundHint" class="notice info small" style="display:none">Click anywhere on the page once to allow alarm sound in your browser.</div>
+
+  <div class="grid dash-top">
+    <section class="card">
+      <h2>Live generator diagram</h2>
+      <div class="diagram-wrap">
+        <svg class="gen" id="genSvg" viewBox="0 0 900 340" role="img" aria-label="Generator diagram with engine, alternator and electrical load">
+          <rect class="static" x="40" y="272" width="640" height="16" rx="4"/>
+          <rect class="static" x="60" y="288" width="30" height="10"/><rect class="static" x="630" y="288" width="30" height="10"/>
+          <!-- shaft coupling -->
+          <rect x="285" y="188" width="70" height="14" fill="#94a3b8"/>
+          <!-- power cable: alternator -> load -->
+          <path class="wire" d="M460 108 V70 H780 V112"/>
+          <path class="flow" d="M460 108 V70 H780 V112"/>
+          <g id="g-engine" class="comp st-inactive">
+            <rect class="body" x="70" y="120" width="215" height="152" rx="12"/>
+            <rect x="95" y="98" width="30" height="22" rx="3" fill="#94a3b8"/><rect x="140" y="98" width="30" height="22" rx="3" fill="#94a3b8"/><rect x="185" y="98" width="30" height="22" rx="3" fill="#94a3b8"/>
+            <path d="M230 98 V60 h30" fill="none" stroke="#94a3b8" stroke-width="8" stroke-linecap="round"/>
+            <g class="spin"><circle cx="105" cy="196" r="30" fill="#fff" stroke="#94a3b8" stroke-width="3"/><path d="M105 168 V224 M77 196 H133" stroke="#94a3b8" stroke-width="4"/></g>
+            <text class="t-title" x="177" y="148" text-anchor="middle">ENGINE</text>
+            <text class="t-val" id="d-rpm" x="190" y="190" text-anchor="middle">RPM —</text>
+            <text class="t-val" id="d-etemp" x="190" y="214" text-anchor="middle">Temp —</text>
+            <text class="t-sub" id="d-evib" x="190" y="236" text-anchor="middle">Vibration —</text>
+            <rect class="tag" x="130" y="248" width="120" height="18" rx="9"/><text class="tag-text" id="d-estat" x="190" y="261" text-anchor="middle">STOPPED</text>
+          </g>
+          <g id="g-alt" class="comp st-inactive">
+            <rect class="body" x="355" y="135" width="210" height="137" rx="26"/>
+            <rect x="425" y="108" width="70" height="27" rx="4" fill="#94a3b8"/>
+            <g stroke="#cbd5e1" stroke-width="3"><path d="M385 150 V258 M405 150 V258 M505 150 V258 M525 150 V258"/></g>
+            <text class="t-title" x="460" y="157" text-anchor="middle">ALTERNATOR</text>
+            <text class="t-val" id="d-volt" x="460" y="185" text-anchor="middle">— V</text>
+            <text class="t-val" id="d-cur" x="460" y="207" text-anchor="middle">— A</text>
+            <text class="t-sub" id="d-wtemp" x="460" y="227" text-anchor="middle">Winding —</text>
+            <rect class="tag" x="400" y="240" width="120" height="18" rx="9"/><text class="tag-text" id="d-astat" x="460" y="253" text-anchor="middle">STOPPED</text>
+          </g>
+          <g id="g-load" class="comp st-inactive">
+            <rect class="body" x="695" y="112" width="170" height="160" rx="12"/>
+            <text class="t-title" x="780" y="140" text-anchor="middle">ELECTRICAL LOAD</text>
+            <circle cx="735" cy="170" r="9" fill="#fff" stroke="#94a3b8" stroke-width="2"/><circle cx="780" cy="170" r="9" fill="#fff" stroke="#94a3b8" stroke-width="2"/><circle cx="825" cy="170" r="9" fill="#fff" stroke="#94a3b8" stroke-width="2"/>
+            <text class="t-val" id="d-load" x="780" y="206" text-anchor="middle">Load —</text>
+            <rect x="715" y="216" width="130" height="8" rx="4" fill="#e3e7ee"/><rect id="d-loadbar" x="715" y="216" width="0" height="8" rx="4" fill="#5b6676"/>
+            <text class="t-sub" id="d-kw" x="780" y="240" text-anchor="middle">— kW</text>
+            <rect class="tag" x="720" y="248" width="120" height="18" rx="9"/><text class="tag-text" id="d-lstat" x="780" y="261" text-anchor="middle">STOPPED</text>
+          </g>
+          <!-- rotor indicator on alternator -->
+          <g class="spin" style="pointer-events:none"><circle cx="538" cy="200" r="13" fill="none" stroke="#94a3b8" stroke-width="3" stroke-dasharray="7 5"/></g>
+          <text class="t-sub" x="40" y="322">Generator state:</text>
+          <text class="t-val" id="d-state" x="150" y="322">STOPPED</text>
+          <text class="t-sub" x="860" y="322" text-anchor="end">Simulation only</text>
+        </svg>
+      </div>
+      <div class="legend">
+        <span><i style="background:var(--safe)"></i>Safe</span><span><i style="background:var(--warn)"></i>Warning</span>
+        <span><i style="background:var(--crit)"></i>Critical</span><span><i style="background:var(--off)"></i>Stopped / inactive</span>
+        <span id="diagramState" class="pill s-INACTIVE" style="margin-left:auto">Generator stopped</span>
+      </div>
+    </section>
+
+    <section class="card">
+      <h2>Simulate faults</h2>
+      <p class="small muted">Injects a fault into the same readings used everywhere else. Start the generator first.</p>
+      <div class="fault-toggles" id="faultToggles"></div>
+      <p style="margin:.9rem 0 0"><button class="btn-sm" id="clearFaults">Clear all simulated faults</button></p>
+    </section>
+  </div>
+
+  <h2 class="section-title">Active alerts</h2>
+  <div class="card" id="alertsBox"><div class="empty">No active alerts.</div></div>
+
+  <h2 class="section-title">Electrical</h2>
+  <div class="cards" id="elec"></div>
+  <h2 class="section-title">Mechanical</h2>
+  <div class="cards" id="mech"></div>
+  <div id="fuelBox" style="margin-top:1rem"></div>
+
+  <h2 class="section-title">Live trends (last 2 minutes)</h2>
+  <div class="grid g2">
+    <div class="card"><h3>Voltage (V)</h3><div class="chart-box"><canvas id="cV"></canvas></div></div>
+    <div class="card"><h3>Current (A)</h3><div class="chart-box"><canvas id="cI"></canvas></div></div>
+    <div class="card"><h3>Temperatures (°C)</h3><div class="chart-box"><canvas id="cT"></canvas></div></div>
+    <div class="card"><h3>Engine speed (RPM)</h3><div class="chart-box"><canvas id="cR"></canvas></div></div>
+  </div>
+</main>
+<script src="/vendor/chart.js/chart.umd.js"></script>
+<script src="/js/common.js"></script>
+<script src="/js/alertui.js"></script>
+<script src="/js/dashboard.js"></script>
+</body></html>

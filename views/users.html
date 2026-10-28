@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="en"><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Users · Generator Monitor</title>
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="/css/app.css">
+</head><body>
+<main>
+  <div class="page-head"><div><h1>Manage users</h1><div class="muted small">Admin only. You cannot remove yourself, and the last administrator cannot be demoted or removed.</div></div></div>
+  <div class="card table-wrap"><table><thead><tr><th>Username</th><th>Role</th><th>Created</th><th>Actions</th></tr></thead><tbody id="rows"></tbody></table></div>
+</main>
+<script src="/js/common.js"></script>
+<script>
+let me;
+async function load() {
+  const users = await api('/users');
+  $('#rows').innerHTML = users.map((u) => `<tr><td>${esc(u.username)} ${u.username === me.username ? '<span class="muted small">(you)</span>' : ''}</td>
+    <td><span class="badge ${u.role}">${u.role}</span></td><td>${fmtTime(u.createdAt)}</td>
+    <td>${u.role === 'operator' ? `<button class="btn-sm" data-a="promote" data-id="${u._id}" data-n="${esc(u.username)}">Promote to admin</button>` : `<button class="btn-sm" data-a="demote" data-id="${u._id}" data-n="${esc(u.username)}">Demote to operator</button>`}
+      <button class="btn-sm btn-danger" data-a="remove" data-id="${u._id}" data-n="${esc(u.username)}">Remove</button></td></tr>`).join('');
+  $$('#rows button').forEach((b) => { b.onclick = async () => {
+    const { a, id, n } = b.dataset;
+    try {
+      if (a === 'remove') { if (!confirm(`Remove account "${n}"? This cannot be undone.`)) return; await api('/users/' + id, { method: 'DELETE', body: { confirm: true } }); }
+      else { if (!confirm(`${a === 'promote' ? 'Promote' : 'Demote'} "${n}"?`)) return; await api(`/users/${id}/role`, { method: 'PATCH', body: { role: a === 'promote' ? 'admin' : 'operator' } }); }
+      toast('Done'); load();
+    } catch (e) { toast(e.message); }
+  }; });
+}
+(async () => { me = await initPage('/users'); load(); })();
+</script>
+</body></html>

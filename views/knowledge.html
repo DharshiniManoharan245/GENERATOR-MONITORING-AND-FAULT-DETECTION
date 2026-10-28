@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="en"><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Knowledge base · Generator Monitor</title>
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="/css/app.css">
+</head><body>
+<main>
+  <div class="page-head"><div><h1>Fault knowledge base</h1><div class="muted small">General, predefined technical information. Simulated faults are demonstrations, not confirmed real-world diagnoses.</div></div></div>
+  <div class="card" style="margin-bottom:1.1rem"><div class="row">
+    <div class="field" style="flex:2"><label for="q">Search</label><input id="q" type="search" placeholder="Search faults, causes, effects, actions…"></div>
+    <div class="field"><label for="cat">Category</label><select id="cat"><option value="">All</option></select></div>
+    <div class="field"><label for="sev">Severity</label><select id="sev"><option value="">All</option><option>High</option><option>Medium</option><option>Low</option></select></div>
+  </div></div>
+  <div class="grid g2" id="list"></div>
+  <div class="empty" id="none" style="display:none">No faults match your search.</div>
+</main>
+<script src="/js/common.js"></script>
+<script>
+let all = [];
+const focus = new URLSearchParams(location.search).get('fault');
+function render() {
+  const q = $('#q').value.toLowerCase(), cat = $('#cat').value, sev = $('#sev').value;
+  const rows = all.filter((f) => (!cat || f.category === cat) && (!sev || f.severity === sev) &&
+    (!q || [f.name, f.category, f.paramLabel, f.action, f.risk, ...f.causes, ...f.effects].join(' ').toLowerCase().includes(q)));
+  $('#none').style.display = rows.length ? 'none' : 'block';
+  $('#list').innerHTML = rows.map((f) => `<article class="card kb-card ${f.key === focus ? 'hl' : ''}" id="kb-${f.key}">
+    <h2>${esc(f.name)}</h2>
+    <div class="kb-meta"><span class="badge">${esc(f.category)}</span><span class="badge">Typical severity: ${esc(f.severity)}</span><span class="badge">Monitors: ${esc(f.paramLabel)}</span></div>
+    <h3>Configured thresholds</h3><p>Warning ${f.direction === 'high' ? '≥' : '≤'} <strong>${f.threshold.warn} ${esc(f.unit)}</strong> · Critical ${f.direction === 'high' ? '≥' : '≤'} <strong>${f.threshold.crit} ${esc(f.unit)}</strong></p>
+    <h3>Possible causes</h3><ul>${f.causes.map((c) => `<li>${esc(c)}</li>`).join('')}</ul>
+    <h3>Potential effects</h3><ul>${f.effects.map((c) => `<li>${esc(c)}</li>`).join('')}</ul>
+    <h3>Recommended action</h3><p>${esc(f.action)}</p>
+  </article>`).join('');
+  if (focus) { const el = $('#kb-' + focus); if (el) el.scrollIntoView({ block: 'center' }); }
+}
+(async () => {
+  await initPage('/knowledge');
+  all = await api('/faults');
+  [...new Set(all.map((f) => f.category))].forEach((c) => $('#cat').insertAdjacentHTML('beforeend', `<option>${esc(c)}</option>`));
+  ['q', 'cat', 'sev'].forEach((id) => { $('#' + id).oninput = render; });
+  render();
+})();
+</script>
+</body></html>

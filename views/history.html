@@ -1,0 +1,98 @@
+<!doctype html>
+<html lang="en"><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>History · Generator Monitor</title>
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="/css/app.css">
+</head><body>
+<main>
+  <div class="page-head"><div><h1>History</h1><div class="muted small">Stored simulated readings and alerts (MongoDB).</div></div></div>
+  <div class="card" style="margin-bottom:1.1rem"><div class="row">
+    <div class="field"><label for="from">From</label><input type="datetime-local" id="from"></div>
+    <div class="field"><label for="to">To</label><input type="datetime-local" id="to"></div>
+    <button class="btn-primary" id="apply">Apply filter</button>
+    <button id="reset">Reset</button>
+    <a class="btn" id="expR" href="#">⬇ Readings CSV</a>
+    <a class="btn" id="expA" href="#">⬇ Alerts CSV</a>
+  </div></div>
+
+  <div class="cards" id="sum"></div>
+
+  <div class="grid g2" style="margin-top:1.1rem">
+    <div class="card"><h3>Voltage (V) &amp; Current (A)</h3><div class="chart-box"><canvas id="h1"></canvas></div></div>
+    <div class="card"><h3>Load (%) &amp; Power (kW)</h3><div class="chart-box"><canvas id="h2"></canvas></div></div>
+    <div class="card"><h3>Temperatures (°C)</h3><div class="chart-box"><canvas id="h3"></canvas></div></div>
+    <div class="card"><h3>Engine speed (RPM) &amp; vibration</h3><div class="chart-box"><canvas id="h4"></canvas></div></div>
+  </div>
+
+  <h2 class="section-title">Fault history</h2>
+  <div class="card table-wrap"><table>
+    <thead><tr><th>Raised</th><th>Fault</th><th>Severity</th><th>Reading</th><th>State</th><th>Ack note</th><th>Resolution</th></tr></thead>
+    <tbody id="rows"></tbody>
+  </table></div>
+
+  <div id="adminBox" style="display:none">
+    <h2 class="section-title">Clear operational history (admin)</h2>
+    <div class="card">
+      <p class="small muted">Deletes readings and alerts only. Users, thresholds and the audit log are never deleted. The action is written to the audit log first. Active alerts are kept.</p>
+      <div class="row">
+        <div class="field"><label for="cmode">What to delete</label><select id="cmode"><option value="before">Records older than a date</option><option value="all">All readings and alerts</option></select></div>
+        <div class="field" id="cdateBox"><label for="cdate">Older than</label><input type="datetime-local" id="cdate"></div>
+        <button class="btn-danger" id="clearBtn">Clear history…</button>
+      </div>
+    </div>
+  </div>
+</main>
+<script src="/vendor/chart.js/chart.umd.js"></script>
+<script src="/js/common.js"></script>
+<script>
+const charts = {};
+function line(id, defs) {
+  if (charts[id]) charts[id].destroy();
+  charts[id] = new Chart($('#' + id), { type: 'line',
+    data: { labels: [], datasets: defs.map(([label, color, axis]) => ({ label, data: [], borderColor: color, backgroundColor: color, borderWidth: 1.5, pointRadius: 0, tension: .25, yAxisID: axis || 'y' })) },
+    options: { animation: false, responsive: true, maintainAspectRatio: false, interaction: { intersect: false, mode: 'index' }, plugins: { legend: { position: 'bottom' } },
+      scales: { x: { ticks: { maxTicksLimit: 6 } }, y: { position: 'left' }, y1: { position: 'right', grid: { drawOnChartArea: false }, display: defs.some((d) => d[2] === 'y1') } } } });
+  return charts[id];
+}
+const iso = (id) => { const v = $('#' + id).value; return v ? new Date(v).toISOString() : ''; };
+function qs() { const q = new URLSearchParams(); if (iso('from')) q.set('from', iso('from')); if (iso('to')) q.set('to', iso('to')); return q; }
+
+async function load() {
+  const q = qs().toString();
+  $('#expR').href = '/api/history/export/readings?' + q; $('#expA').href = '/api/history/export/alerts?' + q;
+  try {
+    const [s, rd, al] = await Promise.all([api('/history/summary?' + q), api('/history/readings?' + q), api('/alerts?limit=200&' + q)]);
+    const card = (l, v, u) => `<div class="pcard st-SAFE" style="border-left-color:var(--brand)"><div class="lbl">${l}</div><div class="val">${v}<small>${u}</small></div></div>`;
+    $('#sum').innerHTML = card('Max winding temp', num(s.maxWindingTemp), '°C') + card('Max bearing temp', num(s.maxBearingTemp), '°C') + card('Max current', num(s.maxCurrent, 2), 'A') +
+      card('Average load', num(s.avgLoad), '%') + card('Warnings', s.warningCount, '') + card('Criticals', s.criticalCount, '') + card('Samples', s.samples, '');
+    const L = rd.map((r) => new Date(r.ts).toLocaleString());
+    const fill = (c, ...cols) => { c.data.labels = L; cols.forEach((k, i) => { c.data.datasets[i].data = rd.map((r) => r[k]); }); c.update('none'); };
+    fill(line('h1', [['Voltage', '#0f6f8f'], ['Current', '#7c4dff', 'y1']]), 'voltage', 'current');
+    fill(line('h2', [['Load %', '#f08a00'], ['Power kW', '#1f9d55', 'y1']]), 'load', 'power');
+    fill(line('h3', [['Winding', '#d93025'], ['Bearing', '#1f9d55']]), 'windingTemp', 'bearingTemp');
+    fill(line('h4', [['RPM', '#0f6f8f'], ['Vibration mm/s', '#d93025', 'y1']]), 'rpm', 'vibration');
+    $('#rows').innerHTML = al.length ? al.map((a) => `<tr><td>${fmtTime(a.startedAt)}</td><td>${esc(a.name)}</td><td><span class="pill s-${a.severity}">${a.severity}</span></td>
+      <td>${num(a.value, 1)} ${esc(a.unit)}</td><td><span class="pill s-${a.status}">${a.status}</span></td>
+      <td>${a.ack ? `${esc(a.ack.by)}: ${esc(a.ack.note)}` : '—'}</td><td>${a.resolution ? `${esc(a.resolution.by)}: ${esc(a.resolution.note)}` : '—'}</td></tr>`).join('') : '<tr><td colspan="7" class="empty">No alerts in this range.</td></tr>';
+  } catch (e) { toast(e.message); }
+}
+
+(async () => {
+  const me = await initPage('/history');
+  $('#apply').onclick = load; $('#reset').onclick = () => { $('#from').value = ''; $('#to').value = ''; load(); };
+  if (me.role === 'admin') {
+    $('#adminBox').style.display = 'block';
+    $('#cmode').onchange = () => { $('#cdateBox').style.display = $('#cmode').value === 'before' ? 'block' : 'none'; };
+    $('#clearBtn').onclick = async () => {
+      const mode = $('#cmode').value, before = iso('cdate');
+      if (mode === 'before' && !before) return toast('Choose a date first');
+      const what = mode === 'all' ? 'ALL readings and alerts' : `readings and alerts older than ${new Date(before).toLocaleString()}`;
+      if (!confirm(`Permanently delete ${what}?\n\nUsers, thresholds and the audit log are not affected. This cannot be undone.`)) return;
+      try { const r = await api('/history/clear', { method: 'POST', body: { mode, before, confirm: true } }); toast(`Deleted ${r.deleted.readings} readings and ${r.deleted.alerts} alerts`); load(); } catch (e) { toast(e.message); }
+    };
+  }
+  load();
+})();
+</script>
+</body></html>

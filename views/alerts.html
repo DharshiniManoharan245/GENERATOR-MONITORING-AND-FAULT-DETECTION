@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="en"><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Alerts · Generator Monitor</title>
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="/css/app.css">
+</head><body>
+<main>
+  <div class="page-head"><div><h1>Alerts</h1><div class="muted small">Stage 1: acknowledge with a note · Stage 2: resolution, verified by the backend against configured limits.</div></div></div>
+  <div class="card" style="margin-bottom:1.1rem"><div class="row">
+    <div class="field"><label for="fs">Status</label><select id="fs"><option value="">All</option><option value="active">Active</option><option value="cleared">Cleared (condition ended)</option><option value="resolved">Verified resolved</option></select></div>
+    <div class="field"><label for="fv">Severity</label><select id="fv"><option value="">All</option><option>WARNING</option><option>CRITICAL</option></select></div>
+    <button class="btn-primary" id="go">Apply</button>
+  </div></div>
+  <div class="card table-wrap"><table>
+    <thead><tr><th>Raised</th><th>Fault</th><th>Severity</th><th>Reading / threshold</th><th>State</th><th>Acknowledgement</th><th>Resolution</th><th></th></tr></thead>
+    <tbody id="rows"></tbody>
+  </table></div>
+</main>
+<script src="/js/common.js"></script>
+<script src="/js/alertui.js"></script>
+<script>
+async function load() {
+  const q = new URLSearchParams(); if ($('#fs').value) q.set('status', $('#fs').value); if ($('#fv').value) q.set('severity', $('#fv').value);
+  const rows = await api('/alerts?' + q);
+  $('#rows').innerHTML = rows.length ? rows.map((a) => `<tr>
+    <td>${fmtTime(a.startedAt)}</td><td><strong>${esc(a.name)}</strong></td><td><span class="pill s-${a.severity}">${a.severity}</span></td>
+    <td>${num(a.value, 1)} ${esc(a.unit)}<br><span class="muted small">limit ${a.threshold} ${esc(a.unit)}</span></td>
+    <td><span class="pill s-${a.status}">${a.status}</span></td>
+    <td>${a.ack ? `${esc(a.ack.by)}<br><span class="muted small">${fmtTime(a.ack.at)}<br>${esc(a.ack.note)}</span>` : '<span class="muted">—</span>'}</td>
+    <td>${a.resolution ? `${esc(a.resolution.by)}<br><span class="muted small">${fmtTime(a.resolution.at)}<br>${esc(a.resolution.note)}</span>` : '<span class="muted">—</span>'}</td>
+    <td><button class="btn-sm" data-id="${a._id}">Open</button></td></tr>`).join('') : '<tr><td colspan="8" class="empty">No alerts match.</td></tr>';
+  $$('#rows button').forEach((b) => { b.onclick = () => openAlert(b.dataset.id, load); });
+}
+(async () => { await initPage('/alerts'); $('#go').onclick = load; load(); setInterval(load, 5000); })();
+</script>
+</body></html>
